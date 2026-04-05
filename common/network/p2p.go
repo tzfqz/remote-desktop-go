@@ -317,7 +317,7 @@ func (p *P2PConnection) Close() error {
 
 // GetConnectionStats 获取连接统计信息
 func (p *P2PConnection) GetConnectionStats() (webrtc.StatsReport, error) {
-	return p.PeerConnection.GetStats()
+	return p.PeerConnection.GetStats(), nil
 }
 
 // GetNATType 获取NAT类型（根据ICE候选判断）
@@ -329,17 +329,14 @@ func (p *P2PConnection) GetNATType() string {
 
 	hasHost := false
 	hasServerReflexive := false
-	hasPeerReflexive := false
 	hasRelay := false
 
 	for _, candidate := range candidates {
 		switch candidate.Typ {
 		case webrtc.ICECandidateTypeHost:
 			hasHost = true
-		case webrtc.ICECandidateTypeServerReflexive:
+		case webrtc.ICECandidateTypeSrflx:
 			hasServerReflexive = true
-		case webrtc.ICECandidateTypePeerReflexive:
-			hasPeerReflexive = true
 		case webrtc.ICECandidateTypeRelay:
 			hasRelay = true
 		}
