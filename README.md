@@ -1,134 +1,176 @@
-# 远程桌面控制软件
+# 远程桌面控制系统
 
-这是一个基于Go语言开发的远程桌面控制软件，分为服务器端、被控端和控制端三部分，支持P2P连接和中继 fallback 机制。
+基于 Go + WebRTC 的远程桌面控制软件，支持 P2P 直连和中继回退。
+
+## 功能特性
+
+- **P2P 直连**：WebRTC DataChannel，低延迟
+- **中继回退**：WebSocket 中继，NAT 穿透失败时的兜底方案
+- **屏幕捕获**：Windows GDI BitBlt 原生截屏，支持 JPEG/PNG 压缩
+- **输入模拟**：Windows SendInput + mouse_event + keybd_event，完整鼠标/键盘事件
+- **Web 前端**：浏览器直接控制，无需安装客户端
+- **跨平台**：服务端支持 Linux/Windows，被控端目前为 Windows
 
 ## 项目结构
 
 ```
-remote-desktop/
-├── server/              # 服务器端
-│   ├── main.go          # 服务器主入口
-│   ├── relay.go         # 中继服务器实现
-│   └── config.yaml      # 服务器配置文件
-├── client/              # 客户端
-│   ├── agent/           # 被控端
-│   │   ├── main.go      # 被控端主入口
-│   │   └── config.yaml  # 被控端配置文件
-│   └── controller/      # 控制端
-│       ├── main.go      # 控制端主入口
-│       └── config.yaml  # 控制端配置文件
-├── common/              # 通用代码
-│   ├── config/          # 配置加载
-│   │   └── config.go    # 配置加载实现
-│   └── network/         # 网络工具
-│       └── p2p.go       # P2P连接实现
-├── scripts/             # 启动脚本
-│   ├── start-server.sh  # 启动服务器
-│   ├── start-agent.sh   # 启动被控端
-│   └── start-controller.sh  # 启动控制端
-├── go.mod               # Go模块文件
-└── README.md            # 项目说明
+remote-desktop-go/
+├── bin/                         # 编译产物（直接运行）
+│   ├── server.exe               # 信令+中继服务器
+│   ├── agent.exe                # 被控端（Windows）
+│   ├── controller.exe           # 控制端 CLI
+│   ├── agent.yaml               # 被控端配置
+│   └── controller.yaml          # 控制端配置
+├── server/                      # 服务端源码
+│   ├── main.go                  # 主入口（Gin HTTP + WebSocket 信令）
+│   └── relay.go                 # WebSocket 中继服务器（端口 8081）
+├── client/
+│   ├── agent/                   # 被控端
+│   │   ├── main.go             # 主程序
+│   │   ├── screen/             # 屏幕捕获模块
+│   │   │   └── capture_windows.go   # GDI BitBlt 实现
+│   │   ├── input/              # 输入模拟模块
+│   │   │   └── input_windows.go    # SendInput 实现
+│   │   └── config.yaml
+│   └── controller/              # 控制端 CLI
+│       ├── main.go
+│       └── config.yaml
+├── web/                         # Web 前端
+│   └── index.html               # 浏览器控制界面
+├── common/
+│   ├── protocol/                # 协议定义
+│   │   └── protocol.go
+│   └── config/                  # 配置加载
+│       └── config.go
+└── README.md
 ```
-
-## 核心功能
-
-1. **P2P连接**：优先使用P2P连接，提供低延迟的远程控制体验
-2. **中继 fallback**：当P2P连接失败时，自动切换到中继模式
-3. **跨平台支持**：被控端和控制端支持Windows和Linux
-4. **屏幕捕获**：支持不同平台的屏幕捕获方法
-5. **远程控制**：支持鼠标、键盘和剪贴板操作
-6. **安全认证**：提供身份认证和数据加密
-
-## 技术栈
-
-- **Go 1.20**：主要开发语言
-- **WebRTC**：用于P2P连接
-- **Gin**：用于服务器端API
-- **WebSocket**：用于服务器与客户端通信
-- **YAML**：用于配置文件
 
 ## 快速开始
 
-### 1. 配置服务器
-
-编辑 `server/config.yaml` 文件，设置服务器的监听地址、端口和其他配置。
-
-### 2. 配置被控端
-
-编辑 `client/agent/config.yaml` 文件，设置服务器地址和设备信息。
-
-### 3. 配置控制端
-
-编辑 `client/controller/config.yaml` 文件，设置服务器地址和显示配置。
-
-### 4. 启动服务器
+### 1. 启动服务器
 
 ```bash
-./scripts/start-server.sh
+cd bin
+./server.exe
 ```
 
-### 5. 启动被控端
+服务端口：
+- HTTP/WebSocket 信令：`http://0.0.0.0:8080`
+- WebSocket 中继：`ws://0.0.0.0:8081/relay`
+
+### 2. 启动被控端
+
+修改 `bin/agent.yaml` 中的服务器地址，然后运行：
 
 ```bash
-./scripts/start-agent.sh
+./agent.exe
 ```
 
-### 6. 启动控制端
+被控端会主动连接服务器（WebSocket），等待控制端发起控制请求。
+
+### 3. 控制端连接
+
+**方式一：Web 前端**
+
+浏览器访问 `http://服务器IP:8080`，即可看到已上线的设备列表，点击连接即可远程控制。
+
+**方式二：CLI 控制端**
+
+修改 `bin/controller.yaml`，运行：
 
 ```bash
-./scripts/start-controller.sh
+./controller.exe
 ```
 
-## 安全注意事项
+## 配置文件说明
 
-1. 请确保使用强密码和安全的认证机制
-2. 建议在防火墙中限制服务器的访问范围
-3. 定期更新软件以修复安全漏洞
-4. 避免在不安全的网络环境中使用
+### agent.yaml（被控端）
 
-## 开发指南
+```yaml
+server:
+  address: "服务器IP:8080"   # 信令服务器地址
+  relay:   "服务器IP:8081"   # 中继服务器地址
 
-### 依赖管理
+agent:
+  device_id: "pc-001"         # 设备唯一标识
+  password: "xxx"             # 连接密码
 
-使用Go Modules进行依赖管理：
+screen:
+  width:    1920              # 截屏分辨率
+  height:   1080
+  fps:      15                # 帧率上限
+  quality:  70                # JPEG 质量 (1-100)
+
+input:
+  enable_keyboard: true
+  enable_mouse:    true
+```
+
+### controller.yaml（控制端）
+
+```yaml
+server:
+  address: "服务器IP:8080"
+  relay:   "服务器IP:8081"
+
+controller:
+  device_id: "pc-001"        # 要控制的设备ID
+  password:  "xxx"
+
+display:
+  width:  1920                # 本地显示分辨率
+  height: 1080
+```
+
+## 技术架构
+
+```
+┌─────────────┐   WebSocket   ┌─────────────┐
+│  Controller │◄────────────►│   Server    │
+│  (控制端)    │   信令/控制    │  (信令服务器) │
+└─────────────┘               └─────────────┘
+       │                            │
+       │ WebRTC DataChannel (P2P)   │ WebSocket (中继回退)
+       │         or                 │         or
+       │    WebSocket 中继          │   WebSocket 直连
+       │         ▼                  │         ▼
+┌─────────────┐               ┌─────────────┐
+│    Agent    │◄─────────────►│    Relay    │
+│  (被控端)    │    中继透传     │ (中继服务器)  │
+│  GDI截屏    │               │  端口8081   │
+│  输入模拟   │               └─────────────┘
+└─────────────┘
+```
+
+## 通信协议
+
+| 消息类型 | 方向 | 说明 |
+|---------|------|------|
+| `join` | Agent→Server | 设备上线注册 |
+| `device_list` | Server→Controller | 设备列表推送 |
+| `offer/answer/ice` | Controller↔Agent | WebRTC 信令 |
+| `control` | Controller→Agent | 控制指令（鼠标/键盘/剪贴板）|
+| `screen_frame` | Agent→Controller | 屏幕帧数据（base64/JPEG）|
+
+## 构建
 
 ```bash
+# 编译全部模块
+go build -o bin/server.exe     ./server
+go build -o bin/agent.exe       ./client/agent
+go build -o bin/controller.exe  ./client/controller
+
+# 安装依赖
 go mod tidy
 ```
 
-### 构建
+## 已知限制
 
-```bash
-# 构建服务器
-go build -o server/server ./server
+- P2P DataChannel 连接流程尚未完全实现（信令已通）
+- 中继模式可正常工作
+- 被控端仅支持 Windows
+- Linux/macOS 被控端需要实现对应平台的 screen/input 模块
 
-# 构建被控端
-go build -o client/agent/agent ./client/agent
+## License
 
-# 构建控制端
-go build -o client/controller/controller ./client/controller
-```
-
-### 测试
-
-```bash
-# 运行测试
-go test ./...
-```
-
-## 部署建议
-
-1. **服务器端**：建议部署在云服务器上，确保有固定的公网IP
-2. **被控端**：在需要远程控制的设备上安装并运行
-3. **控制端**：在控制设备上安装并运行
-
-## 故障排查
-
-1. **连接失败**：检查网络连接、防火墙设置和配置文件
-2. **P2P连接失败**：检查NAT类型和网络环境，可能需要使用中继模式
-3. **屏幕捕获失败**：检查权限设置和屏幕捕获方法
-4. **远程控制无响应**：检查网络延迟和连接状态
-
-## 许可证
-
-MIT License
+MIT
