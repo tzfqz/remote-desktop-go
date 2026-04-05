@@ -1,0 +1,27 @@
+# 编译产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 依赖目录
+vendor/
+
+# 日志文件
+*.log
+
+# 配置文件（保留示例配置）
+!config.yaml
+
+# IDE文件
+.vscode/
+.idea/
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
