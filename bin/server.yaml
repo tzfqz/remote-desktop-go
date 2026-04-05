@@ -1,0 +1,31 @@
+# 服务器配置文件
+
+# 服务器监听地址和端口
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+# STUN/TURN服务器配置
+ice:
+  stun_servers:
+    - "stun:stun.l.google.com:19302"
+  turn_servers:
+    - url: "turn:your-turn-server.com:443"
+      username: "username"
+      credential: "password"
+
+# 安全配置
+security:
+  jwt_secret: "your-secret-key"
+  token_expiry: 86400 # 24小时
+
+# 日志配置
+logging:
+  level: "info"
+  file: "server.log"
+
+# 中继服务器配置
+relay:
+  enable: true
+  max_connections: 1000
+  buffer_size: 1024
