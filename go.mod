@@ -3,12 +3,13 @@ module remote-desktop
 go 1.20
 
 require (
-	github.com/pion/webrtc/v3 v3.2.18
 	github.com/gin-gonic/gin v1.9.1
 	github.com/gorilla/websocket v1.5.0
+	github.com/pion/webrtc/v3 v3.2.18
 	github.com/rs/cors v1.10.1
 	golang.org/x/crypto v0.14.0
 	golang.org/x/sys v0.13.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -48,5 +49,4 @@ require (
 	golang.org/x/net v0.16.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
-	yaml.v3 v3.0.1 // indirect
 )

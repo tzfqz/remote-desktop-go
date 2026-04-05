@@ -1,21 +1,36 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/rs/cors"
 
 	"remote-desktop/common/config"
+	"remote-desktop/common/protocol"
 )
 
 // Server 服务器结构
 type Server struct {
-	router *gin.Engine
-	config ServerConfig
-	relay  *RelayServer
+	router      *gin.Engine
+	config      ServerConfig
+	relay       *RelayServer
+	connections map[string]*ClientConnection
+	connMutex   sync.RWMutex
+	upgrader    websocket.Upgrader
+}
+
+// ClientConnection 客户端连接
+type ClientConnection struct {
+	ID       string
+	Conn     *websocket.Conn
+	IsAgent  bool
+	SendChan chan []byte
 }
 
 // ServerConfig 服务器配置
@@ -49,9 +64,10 @@ type ServerConfig struct {
 
 // Device 设备信息
 type Device struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	IP   string `json:"ip"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	IP       string `json:"ip"`
+	Online   bool   `json:"online"`
 }
 
 // main 主函数
@@ -65,19 +81,21 @@ func main() {
 
 	// 创建服务器
 	server := &Server{
-		config: config,
+		config:      config,
+		connections: make(map[string]*ClientConnection),
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+			CheckOrigin: func(r *http.Request) bool {
+				return true
+			},
+		},
 	}
 
 	// 初始化路由器
 	server.router = gin.Default()
 
 	// 配置CORS
-	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		AllowCredentials: true,
-	})
 	server.router.Use(func(c *gin.Context) {
 		cors.New(cors.Options{
 			AllowedOrigins:   []string{"*"},
@@ -117,8 +135,7 @@ func (s *Server) registerRoutes() {
 
 	// 设备管理
 	s.router.GET("/api/devices", s.handleGetDevices)
-	s.router.POST("/api/devices/register", s.handleRegisterDevice)
-	s.router.POST("/api/devices/unregister", s.handleUnregisterDevice)
+	s.router.GET("/api/ice-servers", s.handleGetICEServers)
 
 	// 中继服务
 	s.router.POST("/api/relay/connect", s.handleRelayConnect)
@@ -126,37 +143,235 @@ func (s *Server) registerRoutes() {
 
 	// 健康检查
 	s.router.GET("/health", s.handleHealth)
+
+	// 静态文件服务 - Web控制端
+	s.router.Static("/web", "./web")
 }
 
-// handleWebSocket 处理WebSocket连接
+// handleWebSocket 处理WebSocket连接 - 信令交换的核心
 func (s *Server) handleWebSocket(c *gin.Context) {
-	// 实现WebSocket连接处理
-	// 这里会处理设备的连接和消息转发
+	// 升级HTTP连接到WebSocket
+	conn, err := s.upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("WebSocket upgrade error: %v", err)
+		return
+	}
+
+	// 从查询参数获取客户端ID和类型
+	clientID := c.Query("id")
+	clientType := c.Query("type")
+	isAgent := clientType == "agent"
+
+	if clientID == "" {
+		conn.Close()
+		return
+	}
+
+	log.Printf("New connection: %s (type: %s)", clientID, clientType)
+
+	// 创建客户端连接
+	clientConn := &ClientConnection{
+		ID:       clientID,
+		Conn:     conn,
+		IsAgent:  isAgent,
+		SendChan: make(chan []byte, 100),
+	}
+
+	// 存储连接
+	s.connMutex.Lock()
+	s.connections[clientID] = clientConn
+	s.connMutex.Unlock()
+
+	// 启动发送协程
+	go s.sendLoop(clientConn)
+
+	// 启动接收协程
+	go s.receiveLoop(clientConn)
+}
+
+// sendLoop 发送消息循环
+func (s *Server) sendLoop(client *ClientConnection) {
+	for {
+		select {
+		case msg := <-client.SendChan:
+			err := client.Conn.WriteMessage(websocket.TextMessage, msg)
+			if err != nil {
+				log.Printf("Send error to %s: %v", client.ID, err)
+				s.removeConnection(client.ID)
+				return
+			}
+		}
+	}
+}
+
+// receiveLoop 接收消息循环 - 信令转发的核心
+func (s *Server) receiveLoop(client *ClientConnection) {
+	defer func() {
+		client.Conn.Close()
+		s.removeConnection(client.ID)
+	}()
+
+	for {
+		// 读取消息
+		_, message, err := client.Conn.ReadMessage()
+		if err != nil {
+			log.Printf("Read error from %s: %v", client.ID, err)
+			return
+		}
+
+		// 解析消息
+		var msg protocol.Message
+		err = json.Unmarshal(message, &msg)
+		if err != nil {
+			log.Printf("Parse message error: %v", err)
+			continue
+		}
+
+		// 设置发送者
+		msg.From = client.ID
+
+		// 转发消息到目标
+		if msg.To != "" {
+			s.forwardMessage(&msg)
+		} else {
+			// 广播消息或处理特定类型
+			s.handleBroadcastMessage(client, &msg)
+		}
+	}
+}
+
+// forwardMessage 转发消息到目标
+func (s *Server) forwardMessage(msg *protocol.Message) {
+	s.connMutex.RLock()
+	targetConn, exists := s.connections[msg.To]
+	s.connMutex.RUnlock()
+
+	if !exists {
+		log.Printf("Target %s not found", msg.To)
+		return
+	}
+
+	// 序列化消息
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("Marshal message error: %v", err)
+		return
+	}
+
+	// 发送消息
+	select {
+	case targetConn.SendChan <- data:
+	default:
+		log.Printf("Send channel full for %s", msg.To)
+	}
+}
+
+// handleBroadcastMessage 处理广播消息
+func (s *Server) handleBroadcastMessage(client *ClientConnection, msg *protocol.Message) {
+	switch msg.Type {
+	case protocol.MsgTypeJoin:
+		// 通知设备列表更新
+		s.broadcastDeviceList()
+	}
+}
+
+// broadcastDeviceList 广播设备列表
+func (s *Server) broadcastDeviceList() {
+	devices := s.getDeviceList()
+	msg := protocol.Message{
+		Type:    protocol.MsgTypeDeviceList,
+		Payload: devices,
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+
+	s.connMutex.RLock()
+	defer s.connMutex.RUnlock()
+
+	for _, conn := range s.connections {
+		select {
+		case conn.SendChan <- data:
+		default:
+		}
+	}
+}
+
+// getDeviceList 获取设备列表
+func (s *Server) getDeviceList() []Device {
+	s.connMutex.RLock()
+	defer s.connMutex.RUnlock()
+
+	devices := make([]Device, 0)
+	for _, conn := range s.connections {
+		if conn.IsAgent {
+			devices = append(devices, Device{
+				ID:     conn.ID,
+				Name:   conn.ID,
+				Online: true,
+			})
+		}
+	}
+	return devices
+}
+
+// removeConnection 移除连接
+func (s *Server) removeConnection(clientID string) {
+	s.connMutex.Lock()
+	if conn, exists := s.connections[clientID]; exists {
+		close(conn.SendChan)
+		delete(s.connections, clientID)
+	}
+	s.connMutex.Unlock()
+
+	// 广播设备列表更新
+	s.broadcastDeviceList()
 }
 
 // handleGetDevices 获取设备列表
 func (s *Server) handleGetDevices(c *gin.Context) {
-	// 实现获取设备列表
+	devices := s.getDeviceList()
+	c.JSON(http.StatusOK, gin.H{
+		"devices": devices,
+	})
 }
 
-// handleRegisterDevice 注册设备
+// handleGetICEServers 获取ICE服务器配置
+func (s *Server) handleGetICEServers(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"stun_servers": s.config.ICE.STUNServers,
+		"turn_servers": s.config.ICE.TURNServers,
+	})
+}
+
+// handleRegisterDevice 注册设备（保持向后兼容）
 func (s *Server) handleRegisterDevice(c *gin.Context) {
-	// 实现设备注册
+	c.JSON(http.StatusOK, gin.H{
+		"status": "ok",
+	})
 }
 
-// handleUnregisterDevice 注销设备
+// handleUnregisterDevice 注销设备（保持向后兼容）
 func (s *Server) handleUnregisterDevice(c *gin.Context) {
-	// 实现设备注销
+	c.JSON(http.StatusOK, gin.H{
+		"status": "ok",
+	})
 }
 
 // handleRelayConnect 处理中继连接
 func (s *Server) handleRelayConnect(c *gin.Context) {
-	// 实现中继连接
+	c.JSON(http.StatusOK, gin.H{
+		"status": "ok",
+	})
 }
 
 // handleRelayData 处理中继数据
 func (s *Server) handleRelayData(c *gin.Context) {
-	// 实现中继数据传输
+	c.JSON(http.StatusOK, gin.H{
+		"status": "ok",
+	})
 }
 
 // handleHealth 健康检查
