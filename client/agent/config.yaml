@@ -1,0 +1,41 @@
+# 被控端配置文件
+
+# 服务器连接配置
+server:
+  url: "ws://127.0.0.1:8080/ws"
+  reconnect_interval: 5  # 秒
+
+# 设备信息
+device:
+  name: "MY-PC"
+  id: "agent-001"
+
+# 屏幕捕获配置
+screen:
+  fps: 30
+  quality: 75         # JPEG 压缩质量 1-100
+  capture_method: "gdi"   # gdi | dxgi | d3d9
+  width: 1920
+  height: 1080
+
+# 输入控制配置
+control:
+  enable_keyboard: true
+  enable_mouse: true
+  enable_clipboard: true
+
+# 网络配置
+network:
+  p2p: true
+  relay: true
+  ice_servers:
+    - "stun:stun.l.google.com:19302"
+
+# 安全配置
+security:
+  auth_token: ""
+
+# 日志配置
+logging:
+  level: "info"
+  file: "agent.log"

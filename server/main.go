@@ -112,7 +112,7 @@ func main() {
 	// 初始化中继服务器
 	if config.Relay.Enable {
 		server.relay = NewRelayServer(config.Relay.MaxConnections, config.Relay.BufferSize)
-		go server.relay.Start()
+		server.relay.Start()
 	}
 
 	// 注册路由

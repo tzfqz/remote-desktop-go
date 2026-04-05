@@ -79,8 +79,9 @@ type KeyPayload struct {
 }
 
 // ScreenFramePayload 屏幕帧载荷
+// Data 为 base64 编码字符串（便于跨语言 JSON 序列化）
 type ScreenFramePayload struct {
-	Data      []byte `json:"data"`
+	Data      string `json:"data"`
 	Width     int    `json:"width"`
 	Height    int    `json:"height"`
 	Timestamp int64  `json:"timestamp"`

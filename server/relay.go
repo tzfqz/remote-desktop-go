@@ -1,104 +1,218 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
+	"log"
+	"net/http"
 	"sync"
+	"time"
+
+	"github.com/gorilla/websocket"
 )
 
-// RelayServer 中继服务器
+// RelayServer acts as a fallback when P2P connection fails.
+// It relays data between agent and controller via WebSocket tunnel.
 type RelayServer struct {
 	maxConnections int
 	bufferSize     int
 	connections    map[string]*RelayConnection
 	mu             sync.RWMutex
+	httpServer     *http.Server
+	upgrader       websocket.Upgrader
 }
 
-// RelayConnection 中继连接
+// RelayConnection represents a tunneled connection.
 type RelayConnection struct {
-	deviceID string
-	sendChan chan []byte
-	recvChan chan []byte
+	DeviceID   string
+	Type       string // "controller" or "agent"
+	Conn       *websocket.Conn
+	SendChan   chan []byte
+	RecvChan   chan []byte
+	LastActive time.Time
 }
 
-// NewRelayServer 创建中继服务器
+// relayMessage wraps raw data for relay transport.
+type relayMessage struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Data []byte `json:"data"`
+}
+
+// NewRelayServer creates a new relay server.
 func NewRelayServer(maxConnections, bufferSize int) *RelayServer {
 	return &RelayServer{
 		maxConnections: maxConnections,
 		bufferSize:     bufferSize,
 		connections:    make(map[string]*RelayConnection),
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  4096,
+			WriteBufferSize: 4096,
+			CheckOrigin: func(r *http.Request) bool {
+				return true
+			},
+		},
 	}
 }
 
-// Start 启动中继服务器
+// Start launches the relay HTTP+WebSocket server on :8081.
 func (r *RelayServer) Start() {
-	// 中继服务器启动逻辑
-	fmt.Println("Relay server started")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/relay", r.handleRelayWS)
+	mux.HandleFunc("/relay/connect", r.handleRelayConnect)
+
+	r.httpServer = &http.Server{
+		Addr:         ":8081",
+		Handler:      mux,
+		ReadTimeout:  5 * time.Minute,
+		WriteTimeout: 5 * time.Minute,
+	}
+
+	go func() {
+		log.Println("Relay server listening on :8081")
+		if err := r.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Relay server error: %v", err)
+		}
+	}()
 }
 
-// AddConnection 添加中继连接
-func (r *RelayServer) AddConnection(deviceID string) (*RelayConnection, error) {
+// Stop shuts down the relay server.
+func (r *RelayServer) Stop() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, conn := range r.connections {
+		close(conn.SendChan)
+		conn.Conn.Close()
+	}
+	if r.httpServer != nil {
+		r.httpServer.Close()
+	}
+}
+
+func (r *RelayServer) handleRelayWS(w http.ResponseWriter, req *http.Request) {
+	conn, err := r.upgrader.Upgrade(w, req, nil)
+	if err != nil {
+		log.Printf("Relay WS upgrade error: %v", err)
+		return
+	}
+
+	deviceID := req.URL.Query().Get("id")
+	deviceType := req.URL.Query().Get("type")
+
+	if deviceID == "" || (deviceType != "controller" && deviceType != "agent") {
+		conn.Close()
+		return
+	}
+
+	r.addConnection(deviceID, deviceType, conn)
+
+	relayConn := r.getConnection(deviceID)
+	if relayConn == nil {
+		return
+	}
+
+	go r.readLoop(relayConn)
+	r.writeLoop(relayConn)
+}
+
+// readLoop reads messages from the relay connection and forwards them.
+func (r *RelayServer) readLoop(conn *RelayConnection) {
+	defer conn.Conn.Close()
+
+	for {
+		_, message, err := conn.Conn.ReadMessage()
+		if err != nil {
+			log.Printf("Relay read error from %s: %v", conn.DeviceID, err)
+			return
+		}
+		conn.LastActive = time.Now()
+
+		var rm relayMessage
+		if err := json.Unmarshal(message, &rm); err != nil {
+			rm = relayMessage{From: conn.DeviceID, To: "", Data: message}
+		}
+
+		if rm.To != "" {
+			r.forwardTo(rm.To, rm.Data)
+		}
+	}
+}
+
+// writeLoop writes queued messages to the WebSocket.
+func (r *RelayServer) writeLoop(conn *RelayConnection) {
+	for msg := range conn.SendChan {
+		if err := conn.Conn.WriteMessage(websocket.BinaryMessage, msg); err != nil {
+			log.Printf("Relay write error to %s: %v", conn.DeviceID, err)
+			return
+		}
+		conn.LastActive = time.Now()
+	}
+}
+
+// forwardTo relays data to the target connection.
+func (r *RelayServer) forwardTo(targetID string, data []byte) {
+	r.mu.RLock()
+	conn, exists := r.connections[targetID]
+	r.mu.RUnlock()
+
+	if !exists {
+		log.Printf("Relay: target %s not found", targetID)
+		return
+	}
+
+	select {
+	case conn.SendChan <- data:
+	default:
+		log.Printf("Relay: target %s buffer full", targetID)
+	}
+}
+
+// handleRelayConnect is a health-check endpoint for relay availability.
+func (r *RelayServer) handleRelayConnect(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "relay": "available"})
+}
+
+// addConnection registers a new relay connection.
+func (r *RelayServer) addConnection(deviceID, deviceType string, conn *websocket.Conn) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if len(r.connections) >= r.maxConnections {
-		return nil, fmt.Errorf("max connections reached")
+		conn.Close()
+		return
 	}
 
-	// 检查设备是否已存在
-	if _, exists := r.connections[deviceID]; exists {
-		return nil, fmt.Errorf("device already connected")
+	relayConn := &RelayConnection{
+		DeviceID:   deviceID,
+		Type:       deviceType,
+		Conn:       conn,
+		SendChan:   make(chan []byte, r.bufferSize),
+		RecvChan:   make(chan []byte, r.bufferSize),
+		LastActive: time.Now(),
 	}
 
-	// 创建新的中继连接
-	conn := &RelayConnection{
-		deviceID: deviceID,
-		sendChan: make(chan []byte, r.bufferSize),
-		recvChan: make(chan []byte, r.bufferSize),
-	}
-
-	r.connections[deviceID] = conn
-	return conn, nil
+	r.connections[deviceID] = relayConn
+	log.Printf("Relay: connected %s (type=%s), total=%d", deviceID, deviceType, len(r.connections))
 }
 
-// RemoveConnection 移除中继连接
-func (r *RelayServer) RemoveConnection(deviceID string) {
+// removeConnection unregisters a relay connection.
+func (r *RelayServer) removeConnection(deviceID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if conn, exists := r.connections[deviceID]; exists {
-		close(conn.sendChan)
-		close(conn.recvChan)
+		close(conn.SendChan)
 		delete(r.connections, deviceID)
+		log.Printf("Relay: disconnected %s, total=%d", deviceID, len(r.connections))
 	}
 }
 
-// GetConnection 获取中继连接
-func (r *RelayServer) GetConnection(deviceID string) (*RelayConnection, error) {
+// getConnection returns a relay connection by device ID.
+func (r *RelayServer) getConnection(deviceID string) *RelayConnection {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-
-	conn, exists := r.connections[deviceID]
-	if !exists {
-		return nil, fmt.Errorf("device not connected")
-	}
-
-	return conn, nil
-}
-
-// RelayData 中继数据
-func (r *RelayServer) RelayData(sourceID, targetID string, data []byte) error {
-	r.mu.RLock()
-	targetConn, exists := r.connections[targetID]
-	r.mu.RUnlock()
-
-	if !exists {
-		return fmt.Errorf("target device not connected")
-	}
-
-	select {
-	case targetConn.recvChan <- data:
-		return nil
-	default:
-		return fmt.Errorf("target buffer full")
-	}
+	return r.connections[deviceID]
 }
