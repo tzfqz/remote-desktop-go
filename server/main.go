@@ -73,7 +73,7 @@ type Device struct {
 func main() {
 	// 加载配置
 	var config ServerConfig
-	err := config.Load("config.yaml")
+	err := config.Load("server_config.yaml")
 	if err != nil {
 		log.Fatalf("Load config error: %v", err)
 	}
@@ -143,8 +143,8 @@ func (s *Server) registerRoutes() {
 	// 健康检查
 	s.router.GET("/health", s.handleHealth)
 
-	// 静态文件服务 - Web控制端
-	s.router.Static("/web", "./web")
+	// 静态文件服务 - Web控制端（相对于项目根目录）
+	s.router.Static("/web", "../server/web")
 }
 
 // handleWebSocket 处理WebSocket连接 - 信令交换的核心

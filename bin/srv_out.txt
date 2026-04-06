@@ -1,0 +1,40 @@
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /ws                       --> main.(*Server).handleWebSocket-fm (4 handlers)
+[GIN-debug] GET    /api/devices              --> main.(*Server).handleGetDevices-fm (4 handlers)
+[GIN-debug] GET    /api/ice-servers          --> main.(*Server).handleGetICEServers-fm (4 handlers)
+[GIN-debug] POST   /api/relay/connect        --> main.(*Server).handleRelayConnect-fm (4 handlers)
+[GIN-debug] POST   /api/relay/data           --> main.(*Server).handleRelayData-fm (4 handlers)
+[GIN-debug] GET    /health                   --> main.(*Server).handleHealth-fm (4 handlers)
+[GIN-debug] GET    /web/*filepath            --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (4 handlers)
+[GIN-debug] HEAD   /web/*filepath            --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (4 handlers)
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Listening and serving HTTP on 0.0.0.0:8080
+[GIN] 2026/04/06 - 07:50:05 | 200 |       526.9µs |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:50:10 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:50:15 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:50:20 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:50:25 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:50:30 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:50:35 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:50:40 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:50:45 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:50:50 | 200 |      1.0013ms |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:50:55 | 200 |       780.3µs |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:00 | 200 |       510.9µs |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:05 | 200 |       503.6µs |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:10 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:15 | 200 |      1.0244ms |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:20 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:25 | 200 |      1.0049ms |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:30 | 200 |       517.7µs |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:35 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:40 | 200 |      1.0073ms |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:45 | 200 |       504.8µs |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:50 | 200 |            0s |       127.0.0.1 | GET      "/ws"
+[GIN] 2026/04/06 - 07:51:55 | 200 |       514.1µs |       127.0.0.1 | GET      "/ws"

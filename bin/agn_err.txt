@@ -1,0 +1,23 @@
+2026/04/06 07:50:05 Read error: read tcp 127.0.0.1:56821->127.0.0.1:8080: wsarecv: An established connection was aborted by the software in your host machine.
+2026/04/06 07:50:10 Read error: read tcp 127.0.0.1:56825->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:50:15 Read error: read tcp 127.0.0.1:56833->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:50:20 Read error: read tcp 127.0.0.1:56835->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:50:25 Read error: read tcp 127.0.0.1:56839->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:50:30 Read error: read tcp 127.0.0.1:56843->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:50:35 Read error: read tcp 127.0.0.1:56844->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:50:40 Read error: read tcp 127.0.0.1:56846->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:50:45 Read error: read tcp 127.0.0.1:56854->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:50:50 Read error: read tcp 127.0.0.1:56855->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:50:55 Read error: read tcp 127.0.0.1:56856->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:00 Read error: read tcp 127.0.0.1:56859->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:05 Read error: read tcp 127.0.0.1:56860->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:10 Read error: read tcp 127.0.0.1:56861->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:15 Read error: read tcp 127.0.0.1:56862->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:20 Read error: read tcp 127.0.0.1:56864->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:25 Read error: read tcp 127.0.0.1:56874->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:30 Read error: read tcp 127.0.0.1:56877->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:35 Read error: read tcp 127.0.0.1:56880->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:40 Read error: read tcp 127.0.0.1:56882->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:45 Read error: read tcp 127.0.0.1:56883->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:50 Read error: read tcp 127.0.0.1:56885->127.0.0.1:8080: use of closed network connection
+2026/04/06 07:51:55 Read error: read tcp 127.0.0.1:56886->127.0.0.1:8080: use of closed network connection

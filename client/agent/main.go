@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -67,7 +68,7 @@ type AgentConfig struct {
 
 func main() {
 	var config AgentConfig
-	if err := config.Load("config.yaml"); err != nil {
+	if err := config.Load("agent_config.yaml"); err != nil {
 		log.Fatalf("Load config error: %v", err)
 	}
 
@@ -109,7 +110,16 @@ func (c *AgentConfig) Load(filePath string) error {
 
 // connectServer 连接服务器
 func (a *Agent) connectServer() error {
-	conn, _, err := websocket.DefaultDialer.Dial(a.config.Server.URL, nil)
+	wsURL := a.config.Server.URL
+	// 如果 URL 没有查询参数则加 ?
+	if !strings.Contains(wsURL, "?") {
+		wsURL += "?"
+	} else {
+		wsURL += "&"
+	}
+	wsURL += "id=" + a.config.Device.ID + "&type=agent"
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		return fmt.Errorf("dial error: %v", err)
 	}

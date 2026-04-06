@@ -61,7 +61,7 @@ type ControllerConfig struct {
 func main() {
 	// 加载配置
 	var config ControllerConfig
-	err := config.Load("config.yaml")
+	err := config.Load("controller_config.yaml")
 	if err != nil {
 		log.Fatalf("Load config error: %v", err)
 	}
