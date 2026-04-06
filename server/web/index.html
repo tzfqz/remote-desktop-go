@@ -248,6 +248,7 @@
                 this.devices = [];
                 this.iceServers = [];
                 this.isConnected = false;
+                this.iceCandidateQueue = [];  // ICE candidate 队列
                 
                 this.initElements();
                 this.initEventListeners();
@@ -300,6 +301,8 @@
                 this.ws.onopen = () => {
                     this.updateStatus('已连接', true);
                     this.connectionInfo.classList.remove('show');
+                    // 连接成功后立即请求设备列表
+                    this.ws.send(JSON.stringify({ type: 'get_devices' }));
                 };
                 
                 this.ws.onmessage = (event) => {
@@ -317,19 +320,19 @@
                 };
             }
 
-            handleMessage(message) {
+            async handleMessage(message) {
                 switch (message.type) {
                     case 'device_list':
                         this.updateDeviceList(message.payload);
                         break;
                     case 'offer':
-                        this.handleOffer(message.payload);
+                        await this.handleOffer(message.payload);
                         break;
                     case 'answer':
-                        this.handleAnswer(message.payload);
+                        await this.handleAnswer(message.payload);
                         break;
                     case 'candidate':
-                        this.handleCandidate(message.payload);
+                        await this.handleCandidate(message.payload);
                         break;
                 }
             }
@@ -457,15 +460,36 @@
                     type: 'answer',
                     sdp: payload.sdp
                 });
+                // 处理排队的 ICE candidates
+                await this.processIceCandidateQueue();
             }
 
             async handleCandidate(payload) {
+                // 如果 remote description 还未设置，先加入队列等待
+                if (!this.peerConnection || !this.peerConnection.remoteDescription || !this.peerConnection.remoteDescription.sdp) {
+                    this.iceCandidateQueue.push(payload);
+                    return;
+                }
                 if (payload.candidate) {
                     await this.peerConnection.addIceCandidate({
                         candidate: payload.candidate,
                         sdpMLineIndex: payload.sdp_m_line,
                         sdpMid: payload.sdp_mid
                     });
+                }
+            }
+
+            // 处理 ICE candidate 队列
+            async processIceCandidateQueue() {
+                while (this.iceCandidateQueue.length > 0) {
+                    const payload = this.iceCandidateQueue.shift();
+                    if (payload.candidate) {
+                        await this.peerConnection.addIceCandidate({
+                            candidate: payload.candidate,
+                            sdpMLineIndex: payload.sdp_m_line,
+                            sdpMid: payload.sdp_mid
+                        });
+                    }
                 }
             }
 

@@ -271,6 +271,18 @@ func (s *Server) handleBroadcastMessage(client *ClientConnection, msg *protocol.
 	case protocol.MsgTypeJoin:
 		// 通知设备列表更新
 		s.broadcastDeviceList()
+	case protocol.MsgTypeGetDevices:
+		// 控制器请求设备列表，立即发送
+		devices := s.getDeviceList()
+		resp := protocol.Message{
+			Type:    protocol.MsgTypeDeviceList,
+			Payload: devices,
+		}
+		data, _ := json.Marshal(resp)
+		select {
+		case client.SendChan <- data:
+		default:
+		}
 	}
 }
 

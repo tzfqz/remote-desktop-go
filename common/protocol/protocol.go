@@ -11,6 +11,7 @@ const (
 	MsgTypeJoin       MessageType = "join"
 	MsgTypeLeave      MessageType = "leave"
 	MsgTypeDeviceList MessageType = "device_list"
+	MsgTypeGetDevices MessageType = "get_devices"
 	
 	// 控制消息
 	MsgTypeMouseMove   MessageType = "mouse_move"
